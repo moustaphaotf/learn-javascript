@@ -1,0 +1,55 @@
+name: Trigger Issue on English Changes with Visual Diff
+
+on:
+  push:
+    paths:
+      - 'en/**'  # Trigger on changes in the "en/" folder
+
+jobs:
+  create-issue:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v2
+      
+    - name: Generate Visual Diff
+      run: |
+        # Check if changes were made to the "en/" folder
+        if git diff --quiet HEAD^ HEAD -- 'en/'; then
+          echo "No changes in the 'en/' folder."
+        else
+          # Generate a visual diff of the changes in the "en/" folder.
+          git diff HEAD^ HEAD 'en/' > ./visual_diff
+        fi
+
+    - name: Create Issue with Visual Diff
+      run: |
+        # Check if the visual_diff file exists (indicating changes in "en/").
+        if [ -f visual_diff ]; then
+          # Define the API endpoint
+          url="https://api.github.com/repos/$GITHUB_REPOSITORY/issues"
+
+          # Define the issue data
+          issue_data='{"title":"Translation Needed","body":"Visual Diff of Changes:\n\n\`\`\`\n'"$(cat visual_diff)"'\n\`\`\`"}'
+          
+          # Send a POST request to create the issue
+          response=$(curl -X POST -d "$issue_data" "$url")
+
+          # Check the response
+          # If the html_url field exists in response data, the issue has been posted
+          if [ $(echo $response | jq -r '.html_url') ]; then
+            echo "Issue created successfully"
+          else
+            echo "Error: Failed to create the issue"
+            echo "$response"
+            exit 1
+          fi
+
+          # Delete the visual_diff file
+          rm visual_diff
+        else
+          echo "No changes in the 'en/' folder."
+        fi
+      # Add error handling
+      - set -e
